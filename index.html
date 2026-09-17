@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pierdol.ing</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{--nord0:#2e3440;--nord1:#3b4252;--nord3:#4c566a;--nord4:#d8dee9;--nord8:#88c0d0;--nord11:#bf616a;--nord14:#a3be8c;--nord15:#b48ead;--bg:var(--nord0);--fg:var(--nord4);--fg-dim:var(--nord3);--page-accent:var(--nord8);color-scheme:dark}
+  html{background:var(--bg);color:var(--fg);font-family:"Space Mono",monospace;font-size:clamp(14px,1.2vw,24px);line-height:1.6;-webkit-font-smoothing:none;font-smooth:never}
+  body{background:var(--bg);min-height:100vh;display:grid;place-items:center;overflow:hidden}
+  ::selection{background:var(--page-accent);color:#000}
+  #bttn{border:1px solid var(--page-accent);background:var(--nord1);color:var(--fg);font-family:inherit;font-size:2.2rem;padding:1rem 2rem;cursor:pointer}
+  #bttn:hover{background:var(--page-accent);color:#000}
+  #skip{position:fixed;top:.8rem;right:1rem;color:var(--fg-dim);cursor:pointer;user-select:none}
+  video{position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:var(--nord0)}
+  #footer{position:fixed;bottom:.8rem;width:100%;text-align:center}
+  #skip,#footer a{text-decoration:none}
+  #footer a{color:var(--fg-dim)}
+</style>
+</head>
+<body>
+  <button id="bttn" type="button">bttn</button>
+  <video id="v" hidden></video>
+  <span id="skip" hidden>[ skip ]</span>
+  <p id="footer"><a href="https://sccl.cc">sccl.cc</a></p>
+<script>
+(() => {
+  const PIN = 'perdole.mp4';
+  const $b = document.getElementById('bttn');
+  const $v = document.getElementById('v');
+  const $s = document.getElementById('skip');
+  let order = [];
+  let pos = 0;
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const build = (names) => {
+    const vids = names.filter(n => /\.(mp4|webm|mov|m4v)$/i.test(n) && n !== PIN);
+    order = [PIN, ...shuffle(vids)];
+  };
+  fetch('/videos/').then(r => r.json())
+    .then(l => build(l.map(e => e.name)))
+    .catch(() => {});
+  const play = () => {
+    if (!order.length) { setTimeout(play, 300); return; }
+    $v.src = '/videos/' + encodeURIComponent(order[pos]);
+    pos = (pos + 1) % order.length;
+    $v.play();
+  };
+  const entry = () => {
+    $b.hidden = true;
+    $v.hidden = false;
+    $v.controls = false;
+    $s.hidden = false;
+    play();
+  };
+  $b.addEventListener('click', entry);
+  $s.addEventListener('click', play);
+  $v.addEventListener('ended', play);
+})();
+</script>
+</body>
+</html>

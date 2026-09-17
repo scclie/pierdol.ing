@@ -1,0 +1,29 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: pierdol-ing-deploy
+
+jobs:
+  deploy:
+    if: startsWith(github.server_url, 'http://10.69.0.10') || startsWith(github.server_url, 'https://git.sccl.cc')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish to /tank/sites
+        run: |
+          set -euo pipefail
+          # one-time migration from the tmpfiles generation: real dir blocks
+          # the symlink flip; move it aside so ln -sfn can take over
+          if [ -d /tank/sites/pierdol/public ] && [ ! -L /tank/sites/pierdol/public ]; then
+            mv /tank/sites/pierdol/public "/tank/sites/pierdol/public.pre-release-$(date -u +%Y%m%dT%H%M%S)"
+          fi
+          RELEASE="$(date -u +%Y%m%dT%H%M%S)-${GITHUB_SHA::8}"
+          REL="/tank/sites/pierdol/releases/${RELEASE}"
+          mkdir -p "${REL}"
+          install -Dm644 index.html "${REL}/index.html"
+          ln -sfn "releases/${RELEASE}" /tank/sites/pierdol/public
+          ls -1 /tank/sites/pierdol/releases | sort | head -n -5 | xargs -r -I{} rm -rf "/tank/sites/pierdol/releases/{}"
