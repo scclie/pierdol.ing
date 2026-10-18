@@ -32,29 +32,59 @@
   const $s = document.getElementById('skip');
   let order = [];
   let pos = 0;
+  let loading = false;
+  const clips = new Map();
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const build = (names) => {
-    const vids = names.filter(n => /\.(mp4|webm|mov|m4v)$/i.test(n) && n !== PIN);
-    order = [PIN, ...shuffle(vids)];
+  const build = (entries) => {
+    const vids = entries.filter(e => e.type === 'file' && /\.(mp4|webm|mov|m4v)$/i.test(e.name));
+    const pin = vids.find(e => e.name === PIN);
+    order = [...(pin ? [pin] : []), ...shuffle(vids.filter(e => e.name !== PIN))];
+    if (!order.length) throw new Error('No videos available');
   };
-  fetch('/videos/').then(r => r.json())
-    .then(l => build(l.map(e => e.name)))
-    .catch(() => {});
-  const play = () => {
-    if (!order.length) { setTimeout(play, 300); return; }
-    $v.src = '/videos/' + encodeURIComponent(order[pos]);
-    pos = (pos + 1) % order.length;
-    $v.play();
+  const download = async (url, options) => {
+    for (let attempt = 0; ; attempt++) {
+      const r = await fetch(url, options);
+      if (r.ok) return r;
+      if (r.status !== 429 || attempt === 2) throw new Error('Download failed: ' + r.status);
+      const retry = r.headers.get('Retry-After');
+      const delay = retry === null ? 0 : /^\d+$/.test(retry)
+        ? Number(retry) * 1000 : Math.max(0, Date.parse(retry) - Date.now()) || 0;
+      await new Promise(resolve => setTimeout(resolve, Math.max(5000 * 2 ** attempt, delay)));
+    }
   };
-  const entry = () => {
+  const play = async () => {
+    if (loading) return;
+    loading = true;
     $b.hidden = true;
-    $v.hidden = false;
-    $v.controls = false;
+    $v.pause();
     $s.hidden = false;
-    play();
+    $s.textContent = '[ loading ]';
+    try {
+      if (!order.length) build(await (await download('/videos/', { cache: 'no-cache' })).json());
+      const clip = order[pos];
+      const url = '/videos/' + encodeURIComponent(clip.name) + '?v=' +
+        encodeURIComponent(clip.size + '-' + clip.mtime);
+      if (!clips.has(url)) {
+        const blob = await (await download(url)).blob();
+        clips.set(url, URL.createObjectURL(blob));
+      }
+      $v.src = clips.get(url);
+      $v.hidden = false;
+      $v.controls = false;
+      pos = (pos + 1) % order.length;
+      $v.play().catch(() => { $v.controls = true; });
+    } catch (_) {
+      $v.hidden = true;
+      $s.hidden = true;
+      $b.textContent = '[ retry ]';
+      $b.hidden = false;
+    } finally {
+      loading = false;
+      $s.textContent = '[ skip ]';
+    }
   };
-  $b.addEventListener('click', entry);
+  $b.addEventListener('click', play);
   $s.addEventListener('click', play);
   $v.addEventListener('ended', play);
 })();
